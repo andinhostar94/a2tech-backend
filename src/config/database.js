@@ -173,24 +173,27 @@ export function initDatabase() {
     )
   `);
 
-  // Tabela de Estoque
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS estoque (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      usuario_id INTEGER NOT NULL,
-      produto TEXT NOT NULL,
-      descricao TEXT,
-      categoria_id INTEGER,
-      quantidade INTEGER NOT NULL DEFAULT 0,
-      preco_unitario REAL NOT NULL,
-      preco_venda REAL,
-      codigo_barras TEXT,
-      imagem_url TEXT,
-      updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
-      FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL
-    )
-  `);
+// Tabela de Estoque
+db.exec(`
+  CREATE TABLE IF NOT EXISTS estoque (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    usuario_id INTEGER NOT NULL,
+    produto TEXT NOT NULL,
+    descricao TEXT,
+    categoria_id INTEGER,
+    quantidade INTEGER NOT NULL DEFAULT 0,
+    preco_unitario REAL NOT NULL,
+    preco_venda REAL,
+    codigo_barras TEXT,
+    imagem_url TEXT,
+    imei TEXT,
+    cor TEXT,
+    armazenamento TEXT,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (usuario_id) REFERENCES usuarios(id) ON DELETE CASCADE,
+    FOREIGN KEY (categoria_id) REFERENCES categorias(id) ON DELETE SET NULL
+  )
+`);
 
   // Tabela de Vendas
   db.exec(`
@@ -206,6 +209,24 @@ export function initDatabase() {
       FOREIGN KEY (cliente_id) REFERENCES clientes(id) ON DELETE SET NULL
     )
   `);
+  // Migrations para tabela de estoque (adicionar novos campos)
+try {
+  const estoqueInfo = db.prepare("PRAGMA table_info(estoque)").all();
+  const estoqueColumns = estoqueInfo.map(col => col.name);
+
+  if (!estoqueColumns.includes('imei')) {
+    db.exec("ALTER TABLE estoque ADD COLUMN imei TEXT");
+  }
+  if (!estoqueColumns.includes('cor')) {
+    db.exec("ALTER TABLE estoque ADD COLUMN cor TEXT");
+  }
+  if (!estoqueColumns.includes('armazenamento')) {
+    db.exec("ALTER TABLE estoque ADD COLUMN armazenamento TEXT");
+  }
+} catch (e) {
+  console.log("Migration estoque check:", e.message);
+}
+
 
   // Migration: Add usuario_id column if it doesn't exist (for existing databases)
   try {

@@ -7,10 +7,14 @@ import { createProductSchema, updateProductSchema } from '../validators/productV
 
 const router = express.Router();
 
-// Adicionar produto ao estoque (requer conta ativa ou trial, com validação)
+// Adicionar produto ao estoque
 router.post('/', authenticateToken, checkTrialStatus, validateRequest(createProductSchema), (req, res) => {
   try {
-    const { produto, descricao, categoria_id, quantidade, preco_unitario, preco_venda, codigo_barras } = req.body;
+    const {
+      produto, descricao, categoria_id, quantidade,
+      preco_unitario, preco_venda, codigo_barras,
+      imei, cor, armazenamento
+    } = req.body;
     const usuario_id = req.user.ownerId;
 
     if (!produto || quantidade === undefined || !preco_unitario) {
@@ -18,9 +22,13 @@ router.post('/', authenticateToken, checkTrialStatus, validateRequest(createProd
     }
 
     const result = db.prepare(`
-      INSERT INTO estoque (usuario_id, produto, descricao, categoria_id, quantidade, preco_unitario, preco_venda, codigo_barras)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(usuario_id, produto, descricao || null, categoria_id || null, quantidade, preco_unitario, preco_venda || preco_unitario, codigo_barras || null);
+      INSERT INTO estoque (usuario_id, produto, descricao, categoria_id, quantidade, preco_unitario, preco_venda, codigo_barras, imei, cor, armazenamento)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      usuario_id, produto, descricao || null, categoria_id || null,
+      quantidade, preco_unitario, preco_venda || preco_unitario,
+      codigo_barras || null, imei || null, cor || null, armazenamento || null
+    );
 
     res.status(201).json({
       message: 'Produto adicionado ao estoque',
@@ -40,14 +48,10 @@ router.get('/', authenticateToken, (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const offset = (page - 1) * limit;
 
-    // Buscar total de produtos
     const totalCount = db.prepare(`
-      SELECT COUNT(*) as count
-      FROM estoque
-      WHERE usuario_id = ?
+      SELECT COUNT(*) as count FROM estoque WHERE usuario_id = ?
     `).get(usuario_id).count;
 
-    // Buscar produtos com paginação
     const produtos = db.prepare(`
       SELECT e.*, c.nome as categoria_nome
       FROM estoque e
@@ -60,8 +64,7 @@ router.get('/', authenticateToken, (req, res) => {
     res.json({
       produtos,
       pagination: {
-        page,
-        limit,
+        page, limit,
         total: totalCount,
         totalPages: Math.ceil(totalCount / limit)
       }
@@ -90,14 +93,17 @@ router.get('/:id', authenticateToken, (req, res) => {
   }
 });
 
-// Atualizar produto (com validação)
+// Atualizar produto
 router.put('/:id', authenticateToken, validateRequest(updateProductSchema), (req, res) => {
   try {
     const { id } = req.params;
     const usuario_id = req.user.ownerId;
-    const { produto, descricao, categoria_id, quantidade, preco_unitario, preco_venda, codigo_barras } = req.body;
-    
-    // Verificar se o produto pertence ao usuário
+    const {
+      produto, descricao, categoria_id, quantidade,
+      preco_unitario, preco_venda, codigo_barras,
+      imei, cor, armazenamento
+    } = req.body;
+
     const produtoExistente = db.prepare('SELECT id FROM estoque WHERE id = ? AND usuario_id = ?').get(id, usuario_id);
     if (!produtoExistente) {
       return res.status(404).json({ error: 'Produto não encontrado' });
@@ -106,34 +112,16 @@ router.put('/:id', authenticateToken, validateRequest(updateProductSchema), (req
     const updates = [];
     const values = [];
 
-    if (produto) {
-      updates.push('produto = ?');
-      values.push(produto);
-    }
-    if (descricao !== undefined) {
-      updates.push('descricao = ?');
-      values.push(descricao);
-    }
-    if (categoria_id !== undefined) {
-      updates.push('categoria_id = ?');
-      values.push(categoria_id);
-    }
-    if (quantidade !== undefined) {
-      updates.push('quantidade = ?');
-      values.push(quantidade);
-    }
-    if (preco_unitario) {
-      updates.push('preco_unitario = ?');
-      values.push(preco_unitario);
-    }
-    if (preco_venda) {
-      updates.push('preco_venda = ?');
-      values.push(preco_venda);
-    }
-    if (codigo_barras !== undefined) {
-      updates.push('codigo_barras = ?');
-      values.push(codigo_barras);
-    }
+    if (produto) { updates.push('produto = ?'); values.push(produto); }
+    if (descricao !== undefined) { updates.push('descricao = ?'); values.push(descricao); }
+    if (categoria_id !== undefined) { updates.push('categoria_id = ?'); values.push(categoria_id); }
+    if (quantidade !== undefined) { updates.push('quantidade = ?'); values.push(quantidade); }
+    if (preco_unitario) { updates.push('preco_unitario = ?'); values.push(preco_unitario); }
+    if (preco_venda) { updates.push('preco_venda = ?'); values.push(preco_venda); }
+    if (codigo_barras !== undefined) { updates.push('codigo_barras = ?'); values.push(codigo_barras); }
+    if (imei !== undefined) { updates.push('imei = ?'); values.push(imei); }
+    if (cor !== undefined) { updates.push('cor = ?'); values.push(cor); }
+    if (armazenamento !== undefined) { updates.push('armazenamento = ?'); values.push(armazenamento); }
 
     if (updates.length === 0) {
       return res.status(400).json({ error: 'Nenhum campo para atualizar' });
@@ -157,13 +145,12 @@ router.delete('/:id', authenticateToken, (req, res) => {
   try {
     const { id } = req.params;
     const usuario_id = req.user.ownerId;
-    
-    // Verificar se o produto pertence ao usuário
+
     const produto = db.prepare('SELECT id FROM estoque WHERE id = ? AND usuario_id = ?').get(id, usuario_id);
     if (!produto) {
       return res.status(404).json({ error: 'Produto não encontrado' });
     }
-    
+
     db.prepare('DELETE FROM estoque WHERE id = ?').run(id);
     res.json({ message: 'Produto deletado com sucesso' });
   } catch (error) {
